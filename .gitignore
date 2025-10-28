@@ -1,0 +1,23 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Data outputs
+data/raw/
+data/processed/
+data/results/
+
+# Caches / logs
+.osrm-cache/
+*.log
+
+# macOS metadata
+.DS_Store
