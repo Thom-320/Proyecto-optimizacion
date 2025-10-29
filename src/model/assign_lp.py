@@ -14,8 +14,9 @@ from src.config import Config
 
 
 class ModeloAsignacionLP:
-    def __init__(self, objetivo: str = "distancia") -> None:
+    def __init__(self, objetivo: str = "distancia", relax: bool = False) -> None:
         self.objetivo = objetivo
+        self.relax = relax
 
     def cargar_datos(self) -> None:
         with open(os.path.join(Config.DATA_PROCESSED, "matriz_distancias.json"), "r", encoding="utf-8") as fh:
@@ -41,8 +42,9 @@ class ModeloAsignacionLP:
     def construir_modelo(self) -> None:
         costos = self.distancias if self.objetivo == "distancia" else self.tiempos
         self.modelo = pulp.LpProblem("AsignacionTransporte", pulp.LpMinimize)
+        var_cat = "Continuous" if self.relax else "Integer"
         self.x = {
-            (r, p): pulp.LpVariable(f"x_{r}_{p}", lowBound=0, cat="Integer")
+            (r, p): pulp.LpVariable(f"x_{r}_{p}", lowBound=0, cat=var_cat)
             for r in self.rutas for p in self.patios
         }
         self.modelo += pulp.lpSum(costos[p][r] * self.x[(r, p)] for r in self.rutas for p in self.patios)
@@ -75,9 +77,37 @@ class ModeloAsignacionLP:
             fh.write(f"Rutas: {len(self.rutas)}\n")
             fh.write(f"Buses totales: {self.total_pvr}\n")
 
+        # Si es relajación, intentar exportar duales y costos reducidos
+        if self.relax:
+            try:
+                # Precios sombra de capacidad
+                dual_rows = []
+                for name, constr in self.modelo.constraints.items():
+                    if name.startswith("Capacidad_Patio_"):
+                        patio = name.replace("Capacidad_Patio_", "")
+                        price = getattr(constr, "pi", None)
+                        if price is not None:
+                            dual_rows.append({"patio_id": patio, "shadow_price": float(price)})
+                if dual_rows:
+                    pd.DataFrame(dual_rows).to_csv(
+                        os.path.join(Config.DATA_RESULTS, "duales_capacidad_lp.csv"), index=False
+                    )
+                # Costos reducidos
+                rc_rows = []
+                for (r, p), var in self.x.items():
+                    dj = getattr(var, "dj", None)
+                    if dj is not None:
+                        rc_rows.append({"geo_code": r, "patio_id": p, "reduced_cost": float(dj)})
+                if rc_rows:
+                    pd.DataFrame(rc_rows).to_csv(
+                        os.path.join(Config.DATA_RESULTS, "reduced_costs_lp.csv"), index=False
+                    )
+            except Exception:
+                pass
 
-def main(objetivo: str = "distancia") -> None:
-    modelo = ModeloAsignacionLP(objetivo=objetivo)
+
+def main(objetivo: str = "distancia", relax: bool = False) -> None:
+    modelo = ModeloAsignacionLP(objetivo=objetivo, relax=relax)
     modelo.cargar_datos()
     modelo.construir_modelo()
     if not modelo.resolver():

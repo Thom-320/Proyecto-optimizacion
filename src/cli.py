@@ -65,7 +65,9 @@ def cmd_solve(args: argparse.Namespace) -> int:
         return 1
     try:
         if args.mode == "lp":
-            assign_lp.main(objetivo=args.objective)
+            assign_lp.main(objetivo=args.objective, relax=False)
+        elif args.mode == "lp_relax":
+            assign_lp.main(objetivo=args.objective, relax=True)
         else:
             assign_mip.main(objetivo=args.objective)
     except (ValueError, RuntimeError) as exc:
@@ -102,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser_costs.set_defaults(func=cmd_costs)
 
     parser_solve = subparsers.add_parser("solve", help="Resuelve el modelo LP o MIP")
-    parser_solve.add_argument("--mode", choices=["lp", "mip"], default="lp")
+    parser_solve.add_argument("--mode", choices=["lp", "lp_relax", "mip"], default="lp")
     parser_solve.add_argument("--objective", choices=["distancia", "tiempo"], default="distancia")
     parser_solve.set_defaults(func=cmd_solve)
 
